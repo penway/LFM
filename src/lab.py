@@ -1,36 +1,37 @@
 from DCGAN import DCGAN
-from LFM import DCGAN_LFM
+from LFMz import DCGAN_LFM
 
 config = {
     "lrg": 2e-4,
     "lrd": 2e-4,
+    
     "z_dim": 100,
     "batch_size": 128,
 
-    "seed": 999,
-    "max_iter": 30001,
+    "seed": 37,
+    "max_iter": 1000001,
 
-    "lamG": 0.5,
-    "lamD": 0.5,
+    "lamG": 0.2,
+    "lamD": 0.2,
 
     "channels": 3,
-    "data_dir": "E:\\Caldron\\GANBOX\\dataset\\celeb_mini\\",
-    # "fid_gt": "E:\\Caldron\\GANBOX\\result\\pretrained_FID\\fid_stats_celeba.npz",
+    "data_dir": "D:\\regis\\Documents\\Datasets\\celeba_1\\",
+    # "data_dir": "D:\\regis\\Documents\\Datasets\\met\\",
     "fid_gt": "E:\\Caldron\\GANBOX\\result\\pretrained_FID\\celeba_pretrained_FID.npz",
 
     "device": "cuda",
     "workers": 0,
     "save_iter": 500,
-    "result_dir": "result\\LFM_mini3\\",
+    "result_dir": "result\\LFMzabs_1_2\\",
 }
 
 lfm = DCGAN_LFM()
 lfm.config(config)
 lfm.train()
 
-# for p in [1, 0.5, 0.1, 0.02]:
+# for p in [0.1, 1]:
 
-#     config["portion"] = p
+#     config["data_dir"] = "D:\\regis\\Documents\\Datasets\\celeba_{}".format(p)
 
 #     config["result_dir"] = "result\\DC_{}\\".format(p)
 #     print("\nDC_{}".format(p))
@@ -39,9 +40,9 @@ lfm.train()
 #     dc.train()
 
 
-#     config["result_dir"] = "result\\LFM_{}\\".format(p)
-#     print("\nLFM_{}".format(p))
-#     lfm = DCGAN_LFM()
-#     lfm.config(config)
-#     lfm.train()
+    # config["result_dir"] = "result\\LFMzabs_{}\\".format(p)
+    # print("\nLFMzabs_{}".format(p))
+    # lfm = DCGAN_LFM()
+    # lfm.config(config)
+    # lfm.train()
     

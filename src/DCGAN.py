@@ -132,7 +132,7 @@ class DCGAN:
                 norm,
             ])
         )
-        self.dataloader = torch.utils.data.DataLoader(dataset, batch_size=self.batch_size, shuffle=False, num_workers=self.workers)
+        self.dataloader = torch.utils.data.DataLoader(dataset, batch_size=self.batch_size, shuffle=True, num_workers=self.workers)
     
 
     def prepare_training(self):
@@ -191,9 +191,6 @@ class DCGAN:
 
         while iter < self.max_iter:
             for i, (real, _) in enumerate(self.dataloader):
-
-                if i > limited_length:
-                    break
 
                 noise = torch.randn((self.batch_size, self.z_dim, 1, 1)).to(self.device)
                 # the -1 used here instead of (batch_size, image_dim)

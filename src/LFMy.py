@@ -64,13 +64,13 @@ class Discriminator(nn.Module):
             nn.Conv2d(ndf * 4, ndf * 8, 4, 2, 1, bias=False),
             nn.BatchNorm2d(ndf * 8),
             nn.LeakyReLU(0.2, inplace=True),
+            nn.Conv2d(ndf * 8, 100, 4, 1, 0, bias=False),
         )
         self.classifier = nn.Sequential(
-            nn.Conv2d(ndf * 8, 1, 4, 1, 0, bias=False),
+            nn.Conv2d(100, 1, 1, 1, 0, bias=False),
             nn.Sigmoid()
         )
         self.extactor = nn.Sequential(
-            nn.Conv2d(ndf * 8, 128, 4, 1, 0, bias=False),
             nn.Tanh()
         )
 
@@ -79,6 +79,20 @@ class Discriminator(nn.Module):
         c = self.classifier(backbone)
         f = self.extactor(backbone)
         return c, f
+
+
+class FeatureLoss(nn.Module):
+    def __init__(self):
+        super(FeatureLoss, self).__init__()
+    
+    def forward(self, x):
+        dot_product = 0
+        hb = int(len(x) / 2)
+        for i in range(hb):
+            dot_product += torch.dot(x[i].view(-1), x[i+hb].view(-1))
+        loss_base = torch.abs(dot_product / hb / 2)
+
+        return loss_base
 
 
 class DCGAN_LFM:
@@ -159,13 +173,14 @@ class DCGAN_LFM:
         self.optimizerD = optim.Adam(self.discriminator.parameters(), lr=self.lrd, betas=(0.5, 0.999))
         self.optimizerG = optim.Adam(self.generator.parameters(), lr=self.lrg, betas=(0.5, 0.999))
         self.criterion = nn.BCELoss()
+        self.feature_c = FeatureLoss()
 
         with open(self.result_dir + "config.json", "w") as current_config:
             json.dump(self.config_dict, current_config)
 
         # log file
         with open(self.result_dir + "log.csv", "w") as log:
-            log.write("index, lossD, lossG, acc_real, acc_fakem, time, fid\n")
+            log.write("index, lossD, lossG, acc_real, acc_fake, time, fid\n")
 
         self.fixed_noise = torch.randn((128, self.z_dim, 1, 1)).to(self.device)
     
@@ -194,6 +209,27 @@ class DCGAN_LFM:
             nn.init.constant_(m.bias.data, 0)
     
 
+    def generate_noise(self):
+        batch_size = self.batch_size
+        z_dim = self.z_dim
+
+        noise = torch.zeros((batch_size, z_dim, 1, 1))
+        count = 0
+        while count < batch_size / 2:
+            n1 = torch.randn((z_dim,))
+            n2 = torch.randn((z_dim,))
+            dr = torch.dot(n1[0:z_dim-1], n2[0:z_dim-1])
+            n2[z_dim-1] = -dr / n1[z_dim-1]
+            if abs(n2[z_dim-1]) > 1.5:
+                continue
+            else:
+                noise[count] = n1.view((z_dim, 1, 1))
+                noise[int(count + batch_size / 2)] = n2.view((z_dim, 1, 1))
+                count += 1
+        
+        return noise
+    
+
     def train(self):
         iter = 0
         start = time()
@@ -205,9 +241,7 @@ class DCGAN_LFM:
         while iter < self.max_iter:
             for i, (real, _) in enumerate(self.dataloader):
                 
-                noise_rand = torch.randn((hb, self.z_dim, 1, 1)).to(self.device)
-                noise_reverse = noise_rand * -1
-                noise = torch.cat((noise_rand, noise_reverse)).to(self.device)
+                noise = self.generate_noise().to(self.device)
 
                 # the -1 used here instead of (batch_size, image_dim)
                 # is because the last batch might just have few images left
@@ -224,9 +258,8 @@ class DCGAN_LFM:
                 lossD_real = self.criterion(disc_real, torch.ones_like(disc_real))
                 lossD_fake = self.criterion(disc_fake, torch.zeros_like(disc_fake))
                 lossD_class = (lossD_real + lossD_fake) / 2
-                lossD_feature = -abs(torch.sum(disc_f[0:hb] + disc_f[hb:hb*2])) / 256
-                lossD = (lossD_class + lossD_feature) / 2
-               
+
+                lossD = lossD_class
 
                 self.discriminator.zero_grad()
                 lossD.backward(retain_graph=True)
@@ -238,7 +271,8 @@ class DCGAN_LFM:
                 output, output_f = self.discriminator(fake)
                 output = output.view(-1)
                 lossG_class = self.criterion(output, torch.ones_like(output))
-                lossG_feature = abs(torch.sum(output_f[0:hb] + output_f[hb:hb*2])) / 256
+                lossG_feature = self.feature_c(output_f)
+
                 lossG = (lossG_class + lossG_feature) / 2
 
                 self.generator.zero_grad()

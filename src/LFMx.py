@@ -70,7 +70,7 @@ class Discriminator(nn.Module):
             nn.Sigmoid()
         )
         self.extactor = nn.Sequential(
-            nn.Conv2d(ndf * 8, 128, 4, 1, 0, bias=False),
+            nn.Conv2d(ndf * 8, 100, 4, 1, 0, bias=False),
             nn.Tanh()
         )
 
@@ -79,6 +79,7 @@ class Discriminator(nn.Module):
         c = self.classifier(backbone)
         f = self.extactor(backbone)
         return c, f
+
 
 
 class DCGAN_LFM:
@@ -194,6 +195,27 @@ class DCGAN_LFM:
             nn.init.constant_(m.bias.data, 0)
     
 
+    def generate_noise(self):
+        batch_size = self.batch_size
+        z_dim = self.z_dim
+
+        noise = torch.zeros((batch_size, z_dim, 1, 1))
+        count = 0
+        while count < batch_size / 2:
+            n1 = torch.randn((z_dim,))
+            n2 = torch.randn((z_dim,))
+            dr = torch.dot(n1[0:z_dim-1], n2[0:z_dim-1])
+            n2[z_dim-1] = -dr / n1[z_dim-1]
+            if torch.abs(n2[z_dim-1]) > 1.2:
+                continue
+            else:
+                noise[count] = n1.view((z_dim, 1, 1))
+                noise[int(count + batch_size / 2)] = n2.view((z_dim, 1, 1))
+                count += 1
+        
+        return noise
+    
+
     def train(self):
         iter = 0
         start = time()
@@ -205,9 +227,7 @@ class DCGAN_LFM:
         while iter < self.max_iter:
             for i, (real, _) in enumerate(self.dataloader):
                 
-                noise_rand = torch.randn((hb, self.z_dim, 1, 1)).to(self.device)
-                noise_reverse = noise_rand * -1
-                noise = torch.cat((noise_rand, noise_reverse)).to(self.device)
+                noise = self.generate_noise().to(self.device)
 
                 # the -1 used here instead of (batch_size, image_dim)
                 # is because the last batch might just have few images left
@@ -224,7 +244,15 @@ class DCGAN_LFM:
                 lossD_real = self.criterion(disc_real, torch.ones_like(disc_real))
                 lossD_fake = self.criterion(disc_fake, torch.zeros_like(disc_fake))
                 lossD_class = (lossD_real + lossD_fake) / 2
-                lossD_feature = -abs(torch.sum(disc_f[0:hb] + disc_f[hb:hb*2])) / 256
+                
+                ### calculate loss feature
+                dot_product = 0
+                for i in range(hb):
+                    dot_product += torch.dot(disc_f[i].view(-1), disc_f[i+hb].view(-1))
+                dot_product = dot_product / self.batch_size
+
+                lossD_feature = (100 - dot_product)
+
                 lossD = (lossD_class + lossD_feature) / 2
                
 
@@ -238,8 +266,15 @@ class DCGAN_LFM:
                 output, output_f = self.discriminator(fake)
                 output = output.view(-1)
                 lossG_class = self.criterion(output, torch.ones_like(output))
-                lossG_feature = abs(torch.sum(output_f[0:hb] + output_f[hb:hb*2])) / 256
-                lossG = (lossG_class + lossG_feature) / 2
+
+
+                dot_product = 0
+                for i in range(hb):
+                    dot_product += torch.dot(output_f[i].view(-1), output_f[i+hb].view(-1))
+                dot_product = dot_product / self.batch_size
+                lossG_feature = dot_product / 25
+
+                lossG = lossG_class
 
                 self.generator.zero_grad()
                 lossG.backward()

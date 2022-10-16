@@ -70,7 +70,7 @@ class Discriminator(nn.Module):
             nn.Sigmoid()
         )
         self.extactor = nn.Sequential(
-            nn.Conv2d(ndf * 8, 128, 4, 1, 0, bias=False),
+            nn.Conv2d(ndf * 8, 100, 4, 1, 0, bias=False),
             nn.Tanh()
         )
 
@@ -224,8 +224,10 @@ class DCGAN_LFM:
                 lossD_real = self.criterion(disc_real, torch.ones_like(disc_real))
                 lossD_fake = self.criterion(disc_fake, torch.zeros_like(disc_fake))
                 lossD_class = (lossD_real + lossD_fake) / 2
-                lossD_feature = -abs(torch.sum(disc_f[0:hb] + disc_f[hb:hb*2])) / 256
-                lossD = (lossD_class + lossD_feature) / 2
+                # lossD_feature = -torch.log(torch.linalg.vector_norm(disc_f[0:hb] + disc_f[hb:hb*2]) / 10 / self.batch_size)
+                # lossD_feature = -torch.log(torch.linalg.vector_norm(disc_f[0:hb] + disc_f[hb:hb*2], 1) / 100 / self.batch_size)  # this one is strangely great
+                lossD_feature = -abs(torch.sum(disc_f[0:hb] + disc_f[hb:hb*2])) / 200 / self.batch_size
+                lossD = self.lamD * lossD_class + (1 - self.lamD) * lossD_feature
                
 
                 self.discriminator.zero_grad()
@@ -238,8 +240,10 @@ class DCGAN_LFM:
                 output, output_f = self.discriminator(fake)
                 output = output.view(-1)
                 lossG_class = self.criterion(output, torch.ones_like(output))
-                lossG_feature = abs(torch.sum(output_f[0:hb] + output_f[hb:hb*2])) / 256
-                lossG = (lossG_class + lossG_feature) / 2
+                # lossG_feature = -torch.log(1 - torch.linalg.vector_norm(output_f[0:hb] + output_f[hb:hb*2]) / 10 / self.batch_size)
+                # lossG_feature = -torch.log(1 - torch.linalg.vector_norm(output_f[0:hb] + output_f[hb:hb*2], 1) / 100 / self.batch_size)  # great
+                lossG_feature = abs(torch.sum(output_f[0:hb] + output_f[hb:hb*2])) / 200 / self.batch_size
+                lossG = self.lamG * lossG_class + (1 - self.lamG) * lossG_feature
 
                 self.generator.zero_grad()
                 lossG.backward()
