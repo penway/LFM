@@ -15,14 +15,14 @@ config = {
     "lamD": 0.2,
 
     "channels": 3,
-    "data_dir": "D:\\regis\\Documents\\Datasets\\celeba_1\\",
+    "data_dir": "D:\\regis\\Documents\\celeba_0.1\\",
     # "data_dir": "D:\\regis\\Documents\\Datasets\\met\\",
     "fid_gt": "E:\\Caldron\\GANBOX\\result\\pretrained_FID\\celeba_pretrained_FID.npz",
 
     "device": "cuda",
     "workers": 0,
     "save_iter": 500,
-    "result_dir": "result\\LFMzabs_1_2\\",
+    "result_dir": "result\\LFMzabs_0.1_2\\",
 }
 
 lfm = DCGAN_LFM()
